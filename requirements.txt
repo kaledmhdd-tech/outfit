@@ -1,0 +1,5 @@
+Flask
+httpx
+Pillow
+requests
+gunicorn
