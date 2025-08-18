@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 app = Flask(__name__)
 
-BASE_IMAGE_URL = "https://i.postimg.cc/DyMZRFqX/IMG-0918-3.png"
+BASE_IMAGE_URL = "https://i.postimg.cc/G2Y0pWfm/IMG-1149.jpg"
 
 API_KEYS = {
     "BNGX": True,
