@@ -44,7 +44,7 @@ def fetch_image_by_id(item_id):
         print(f"Error loading item {item_id}: {e}")
         return item_id, None
 
-def overlay_images(base_image_url, item_ids, avatar_id=None, weapon_skin_id=None, pet_skin_id=None):
+def overlay_images(base_image_url, outfit_ids, avatar_id=None, weapon_ids=None, pet_skin_id=None):
     base = Image.open(BytesIO(requests.get(base_image_url).content)).convert("RGBA")
     draw = ImageDraw.Draw(base)
 
@@ -60,19 +60,19 @@ def overlay_images(base_image_url, item_ids, avatar_id=None, weapon_skin_id=None
     ]
     sizes = [(130, 130)] * len(positions)
 
-    items_to_fetch = [(i, item_ids[i]) for i in range(min(6, len(item_ids)))]
+    # تجهيز قائمة العناصر للعرض
+    items_to_fetch = [(i, outfit_ids[i]) for i in range(min(6, len(outfit_ids)))]
+    
+    if weapon_ids:
+        for idx, wid in enumerate(weapon_ids):
+            items_to_fetch.append((6 + idx, wid))  # عرض أول سلاح فقط في مكان واحد
 
-    if weapon_skin_id:
-        items_to_fetch.append((6, weapon_skin_id))
     if pet_skin_id:
         items_to_fetch.append((7, pet_skin_id))
 
+    # تحميل الصور بشكل متوازي
     with ThreadPoolExecutor(max_workers=8) as executor:
-        future_to_pos = {
-            executor.submit(fetch_image_by_id, item_id): pos
-            for pos, item_id in items_to_fetch
-        }
-
+        future_to_pos = {executor.submit(fetch_image_by_id, item_id): pos for pos, item_id in items_to_fetch}
         for future in future_to_pos:
             pos = future_to_pos[future]
             _, img = future.result()
@@ -80,6 +80,7 @@ def overlay_images(base_image_url, item_ids, avatar_id=None, weapon_skin_id=None
                 img = img.resize(sizes[pos], Image.LANCZOS)
                 base.paste(img, positions[pos], img)
 
+    # عرض الشخصية (Avatar)
     if avatar_id:
         try:
             avatar_url = f"https://pika-ffitmes-api.vercel.app/?item_id={avatar_id}&watermark=TaitanApi&key=PikaApis"
@@ -97,7 +98,6 @@ def overlay_images(base_image_url, item_ids, avatar_id=None, weapon_skin_id=None
             text_x = center_x + (130 - text_width) // 2
             text_y = center_y + 130 + 5
             draw.text((text_x, text_y), text, fill="white", font=font)
-
         except Exception as e:
             print(f"Error loading avatar {avatar_id}: {e}")
 
@@ -117,26 +117,21 @@ def api():
         return jsonify({"error": "Invalid or inactive API key"}), 403
 
     data = fetch_data(uid)
-    if not data or "AccountProfileInfo" not in data:
+    if not data:
         return jsonify({"error": "Failed to fetch valid profile data"}), 500
 
-    profile = data.get("AccountProfileInfo", {})
-    item_ids = profile.get("EquippedOutfit", [])  # استخدام الـ Outfit لعرض الصور
-
+    profile_info = data.get("AccountProfileInfo", {})
     account_info = data.get("AccountInfo", {})
+
+    outfit_ids = profile_info.get("EquippedOutfit", [])
     avatar_id = account_info.get("AccountAvatarId")
-
-    weapon_skin_raw = account_info.get("weaponSkinShows", [])
-    weapon_skin_id = weapon_skin_raw[0] if isinstance(weapon_skin_raw, list) and weapon_skin_raw else (
-        weapon_skin_raw if isinstance(weapon_skin_raw, int) else None
-    )
-
+    weapon_ids = account_info.get("weaponSkinShows", [])
     pet_skin_id = data.get("petInfo", {}).get("skinId")
 
-    if not item_ids or not avatar_id:
+    if not outfit_ids or not avatar_id:
         return jsonify({"error": "Missing equipped outfit or avatar data"}), 500
 
-    image = overlay_images(BASE_IMAGE_URL, item_ids, avatar_id, weapon_skin_id, pet_skin_id)
+    image = overlay_images(BASE_IMAGE_URL, outfit_ids, avatar_id, weapon_ids, pet_skin_id)
 
     img_io = BytesIO()
     image.save(img_io, 'PNG')
