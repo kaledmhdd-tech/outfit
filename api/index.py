@@ -14,8 +14,6 @@ API_KEYS = {
     "busy": False
 }
 
-# ==== الأدوات ====
-
 def is_key_valid(api_key):
     return API_KEYS.get(api_key, False)
 
@@ -44,7 +42,7 @@ def fetch_image_by_id(item_id):
         print(f"Error loading item {item_id}: {e}")
         return item_id, None
 
-def overlay_images(base_image_url, outfit_ids, avatar_id=None, weapon_ids=None, pet_skin_id=None):
+def overlay_images(base_image_url, outfit_ids, character_id=None, weapon_ids=None, pet_skin_id=None):
     base = Image.open(BytesIO(requests.get(base_image_url).content)).convert("RGBA")
     draw = ImageDraw.Draw(base)
 
@@ -60,13 +58,14 @@ def overlay_images(base_image_url, outfit_ids, avatar_id=None, weapon_ids=None, 
     ]
     sizes = [(130, 130)] * len(positions)
 
-    # تجهيز قائمة العناصر للعرض
+    # تجهيز عناصر الزي
     items_to_fetch = [(i, outfit_ids[i]) for i in range(min(6, len(outfit_ids)))]
-    
-    if weapon_ids:
-        for idx, wid in enumerate(weapon_ids):
-            items_to_fetch.append((6 + idx, wid))  # عرض أول سلاح فقط في مكان واحد
 
+    # إضافة السلاح
+    if weapon_ids:
+        items_to_fetch.append((6, weapon_ids[0]))  # نعرض أول سلاح فقط في مكان السلاح
+
+    # إضافة الحيوان الأليف
     if pet_skin_id:
         items_to_fetch.append((7, pet_skin_id))
 
@@ -80,16 +79,16 @@ def overlay_images(base_image_url, outfit_ids, avatar_id=None, weapon_ids=None, 
                 img = img.resize(sizes[pos], Image.LANCZOS)
                 base.paste(img, positions[pos], img)
 
-    # عرض الشخصية (Avatar)
-    if avatar_id:
+    # عرض الشخصية الكاملة في منتصف البانر
+    if character_id:
         try:
-            avatar_url = f"https://pika-ffitmes-api.vercel.app/?item_id={avatar_id}&watermark=TaitanApi&key=PikaApis"
-            avatar = Image.open(BytesIO(requests.get(avatar_url).content)).convert("RGBA")
-            avatar = avatar.resize((130, 130), Image.LANCZOS)
+            char_url = f"https://pika-ffitmes-api.vercel.app/?item_id={character_id}&watermark=TaitanApi&key=PikaApis"
+            character_img = Image.open(BytesIO(requests.get(char_url).content)).convert("RGBA")
+            character_img = character_img.resize((130, 130), Image.LANCZOS)
 
-            center_x = (base.width - avatar.width) // 2
+            center_x = (base.width - character_img.width) // 2
             center_y = 370
-            base.paste(avatar, (center_x, center_y), avatar)
+            base.paste(character_img, (center_x, center_y), character_img)
 
             font = get_font(25)
             text = "DEV: BNGX"
@@ -99,11 +98,9 @@ def overlay_images(base_image_url, outfit_ids, avatar_id=None, weapon_ids=None, 
             text_y = center_y + 130 + 5
             draw.text((text_x, text_y), text, fill="white", font=font)
         except Exception as e:
-            print(f"Error loading avatar {avatar_id}: {e}")
+            print(f"Error loading character {character_id}: {e}")
 
     return base
-
-# ==== المسار الرئيسي ====
 
 @app.route('/api', methods=['GET'])
 def api():
@@ -124,14 +121,14 @@ def api():
     account_info = data.get("AccountInfo", {})
 
     outfit_ids = profile_info.get("EquippedOutfit", [])
-    avatar_id = account_info.get("AccountAvatarId")
+    character_id = account_info.get("AccountAvatarId")  # هنا أصبح الشخصية الكاملة
     weapon_ids = account_info.get("weaponSkinShows", [])
     pet_skin_id = data.get("petInfo", {}).get("skinId")
 
-    if not outfit_ids or not avatar_id:
-        return jsonify({"error": "Missing equipped outfit or avatar data"}), 500
+    if not outfit_ids or not character_id:
+        return jsonify({"error": "Missing equipped outfit or character data"}), 500
 
-    image = overlay_images(BASE_IMAGE_URL, outfit_ids, avatar_id, weapon_ids, pet_skin_id)
+    image = overlay_images(BASE_IMAGE_URL, outfit_ids, character_id, weapon_ids, pet_skin_id)
 
     img_io = BytesIO()
     image.save(img_io, 'PNG')
