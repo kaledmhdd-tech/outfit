@@ -19,7 +19,7 @@ def is_key_valid(api_key):
     return API_KEYS.get(api_key, False)
 
 def fetch_data(uid):
-    url = f"https://info-navy.vercel.app/get?uid={uid}"
+    url = f"https://info-plum-six.vercel.app/get?uid={uid}"
     try:
         res = requests.get(url, timeout=5)
         res.raise_for_status()
