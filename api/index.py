@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, send_file
 import requests
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 app = Flask(__name__)
 
@@ -19,7 +20,7 @@ def is_key_valid(api_key):
     return API_KEYS.get(api_key, False)
 
 def fetch_data(uid):
-    url = f"https://info-six-theta.vercel.app/get?uid={uid}"
+    url = f"https://info-gamma-lilac.vercel.app/get?uid={uid}"
     try:
         res = requests.get(url, timeout=5)
         res.raise_for_status()
@@ -34,15 +35,19 @@ def get_font(size=24):
     except:
         return ImageFont.truetype("DejaVuSans-Bold.ttf", size)
 
-def fetch_image_by_id(item_id):
-    try:
-        url = f"https://pika-ffitmes-api.vercel.app/?item_id={item_id}&watermark=TaitanApi&key=PikaApis"
-        img = Image.open(BytesIO(requests.get(url).content)).convert("RGBA")
-        return item_id, img
-    except Exception as e:
-        print(f"Error loading item {item_id}: {e}")
-        return item_id, None
+# ✅ دالة جلب الصورة بمحاولات retry تلقائيًا
+def fetch_image_by_id(item_id, retries=3):
+    url = f"https://pika-ffitmes-api.vercel.app/?item_id={item_id}&watermark=TaitanApi&key=PikaApis"
+    for attempt in range(1, retries + 1):
+        try:
+            img = Image.open(BytesIO(requests.get(url, timeout=5).content)).convert("RGBA")
+            return item_id, img
+        except Exception as e:
+            print(f"[Retry {attempt}/{retries}] Error loading item {item_id}: {e}")
+            if attempt == retries:
+                return item_id, None
 
+# ✅ تعديل overlay_images لتجلب الصور بالتوازي
 def overlay_images(base_image_url, item_ids, avatar_id=None, weapon_skin_id=None, pet_skin_id=None):
     base = Image.open(BytesIO(requests.get(base_image_url).content)).convert("RGBA")
     draw = ImageDraw.Draw(base)
@@ -66,13 +71,22 @@ def overlay_images(base_image_url, item_ids, avatar_id=None, weapon_skin_id=None
     if pet_skin_id:
         items_to_fetch.append((7, pet_skin_id))
 
-    # ✅ جلب الصور واحد تلو الآخر
-    for pos, item_id in items_to_fetch:
-        _, img = fetch_image_by_id(item_id)
+    # ✅ جلب جميع الصور بالتوازي باستخدام ThreadPoolExecutor
+    fetched_images = {}
+    with ThreadPoolExecutor(max_workers=len(items_to_fetch)) as executor:
+        futures = {executor.submit(fetch_image_by_id, item_id): pos for pos, item_id in items_to_fetch}
+        for future in as_completed(futures):
+            pos = futures[future]
+            item_id, img = future.result()
+            fetched_images[pos] = img
+
+    # ✅ دمج الصور التي تم جلبها
+    for pos, img in fetched_images.items():
         if img:
             img = img.resize(sizes[pos], Image.LANCZOS)
             base.paste(img, positions[pos], img)
 
+    # ✅ جلب الصورة الرمزية (Avatar)
     if avatar_id:
         try:
             avatar_url = f"https://pika-ffitmes-api.vercel.app/?item_id={avatar_id}&watermark=TaitanApi&key=PikaApis"
