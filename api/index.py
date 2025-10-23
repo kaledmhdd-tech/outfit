@@ -20,7 +20,7 @@ def is_key_valid(api_key):
     return API_KEYS.get(api_key, False)
 
 def fetch_data(uid):
-    url = f"https://info-gamma-lilac.vercel.app/get?uid={uid}"
+    url = f"https://info-six-neon.vercel.app/get?uid={uid}"
     try:
         res = requests.get(url, timeout=5)
         res.raise_for_status()
@@ -35,7 +35,6 @@ def get_font(size=24):
     except:
         return ImageFont.truetype("DejaVuSans-Bold.ttf", size)
 
-# ✅ دالة جلب الصورة بمحاولات retry تلقائيًا
 def fetch_image_by_id(item_id, retries=3):
     url = f"https://pika-ffitmes-api.vercel.app/?item_id={item_id}&watermark=TaitanApi&key=PikaApis"
     for attempt in range(1, retries + 1):
@@ -47,8 +46,7 @@ def fetch_image_by_id(item_id, retries=3):
             if attempt == retries:
                 return item_id, None
 
-# ✅ تعديل overlay_images لتجلب الصور بالتوازي
-def overlay_images(base_image_url, item_ids, avatar_id=None, weapon_skin_id=None, pet_skin_id=None):
+def overlay_images(base_image_url, clothes_ids, avatar_id=None, weapon_skin_id=None, pet_skin_id=None):
     base = Image.open(BytesIO(requests.get(base_image_url).content)).convert("RGBA")
     draw = ImageDraw.Draw(base)
 
@@ -64,14 +62,13 @@ def overlay_images(base_image_url, item_ids, avatar_id=None, weapon_skin_id=None
     ]
     sizes = [(130, 130)] * len(positions)
 
-    items_to_fetch = [(i, item_ids[i]) for i in range(min(6, len(item_ids)))]
+    items_to_fetch = [(i, clothes_ids[i]) for i in range(min(6, len(clothes_ids)))]
 
     if weapon_skin_id:
         items_to_fetch.append((6, weapon_skin_id))
     if pet_skin_id:
         items_to_fetch.append((7, pet_skin_id))
 
-    # ✅ جلب جميع الصور بالتوازي باستخدام ThreadPoolExecutor
     fetched_images = {}
     with ThreadPoolExecutor(max_workers=len(items_to_fetch)) as executor:
         futures = {executor.submit(fetch_image_by_id, item_id): pos for pos, item_id in items_to_fetch}
@@ -80,19 +77,17 @@ def overlay_images(base_image_url, item_ids, avatar_id=None, weapon_skin_id=None
             item_id, img = future.result()
             fetched_images[pos] = img
 
-    # ✅ دمج الصور التي تم جلبها
     for pos, img in fetched_images.items():
         if img:
             img = img.resize(sizes[pos], Image.LANCZOS)
             base.paste(img, positions[pos], img)
 
-    # ✅ جلب الصورة الرمزية (Avatar)
+    # جلب الصورة الرمزية (Avatar)
     if avatar_id:
         try:
             avatar_url = f"https://pika-ffitmes-api.vercel.app/?item_id={avatar_id}&watermark=TaitanApi&key=PikaApis"
             avatar = Image.open(BytesIO(requests.get(avatar_url).content)).convert("RGBA")
             avatar = avatar.resize((130, 130), Image.LANCZOS)
-
             center_x = (base.width - avatar.width) // 2
             center_y = 370
             base.paste(avatar, (center_x, center_y), avatar)
@@ -104,7 +99,6 @@ def overlay_images(base_image_url, item_ids, avatar_id=None, weapon_skin_id=None
             text_x = center_x + (130 - text_width) // 2
             text_y = center_y + 130 + 5
             draw.text((text_x, text_y), text, fill="white", font=font)
-
         except Exception as e:
             print(f"Error loading avatar {avatar_id}: {e}")
 
@@ -128,22 +122,20 @@ def api():
         return jsonify({"error": "Failed to fetch valid profile data"}), 500
 
     profile = data.get("AccountProfileInfo", {})
-    item_ids = profile.get("EquippedOutfit", [])
+    clothes_ids = profile.get("clothes", [])
 
     account_info = data.get("AccountInfo", {})
-    avatar_id = account_info.get("AccountAvatarId")
+    avatar_id = account_info.get("headPic")  # أو avatarId إذا موجود
 
-    weapon_raw = account_info.get("EquippedWeapon", [])
-    weapon_skin_id = weapon_raw[0] if isinstance(weapon_raw, list) and weapon_raw else (
-        weapon_raw if isinstance(weapon_raw, int) else None
-    )
+    weapon_skin_id = account_info.get("weaponSkinShows", [])
+    weapon_skin_id = weapon_skin_id[0] if weapon_skin_id else None
 
     pet_skin_id = data.get("petInfo", {}).get("skinId")
 
-    if not item_ids or not avatar_id:
+    if not clothes_ids or not avatar_id:
         return jsonify({"error": "Missing equipped outfit or avatar data"}), 500
 
-    image = overlay_images(BASE_IMAGE_URL, item_ids, avatar_id, weapon_skin_id, pet_skin_id)
+    image = overlay_images(BASE_IMAGE_URL, clothes_ids, avatar_id, weapon_skin_id, pet_skin_id)
 
     img_io = BytesIO()
     image.save(img_io, 'PNG')
