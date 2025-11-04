@@ -118,16 +118,16 @@ def api():
         return jsonify({"error": "Invalid or inactive API key"}), 403
 
     data = fetch_data(uid)
-    if not data or "AccountProfileInfo" not in data or "AccountInfo" not in data:
+    if not data or "basicInfo" not in data or "profileInfo" not in data:
         return jsonify({"error": "Failed to fetch valid profile data"}), 500
 
-    profile = data.get("AccountProfileInfo", {})
+    profile = data.get("profileInfo", {})
     clothes_ids = profile.get("clothes", [])
 
-    account_info = data.get("AccountInfo", {})
-    avatar_id = account_info.get("headPic")  # أو avatarId إذا موجود
+    basic_info = data.get("basicInfo", {})
+    avatar_id = profile.get("avatarId") or basic_info.get("headPic")
 
-    weapon_skin_id = account_info.get("weaponSkinShows", [])
+    weapon_skin_id = basic_info.get("weaponSkinShows", [])
     weapon_skin_id = weapon_skin_id[0] if weapon_skin_id else None
 
     pet_skin_id = data.get("petInfo", {}).get("skinId")
