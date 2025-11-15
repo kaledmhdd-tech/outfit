@@ -20,7 +20,7 @@ def is_key_valid(api_key):
     return API_KEYS.get(api_key, False)
 
 def fetch_data(uid):
-    url = f"https://info-yo1m.onrender.com/get?uid={uid}&region=ME"
+    url = f"https://info-five-mauve.vercel.app/accinfo?uid={uid}&region=IND"
     try:
         res = requests.get(url, timeout=10)
         res.raise_for_status()
@@ -122,13 +122,13 @@ def api():
         return jsonify({"error": "Failed to fetch valid profile data"}), 500
 
     profile = data.get("profileInfo", {})
-    clothes_ids = profile.get("clothes", [])
+    clothes_ids = profile.get("cosmeticItems", [])  # تحديث من clothes إلى cosmeticItems
 
     basic_info = data.get("basicInfo", {})
     avatar_id = profile.get("avatarId") or basic_info.get("headPic")
 
-    weapon_skin_id = basic_info.get("weaponSkinShows", [])
-    weapon_skin_id = weapon_skin_id[0] if weapon_skin_id else None
+    weapon_skin_list = basic_info.get("weaponSkinShows", [])
+    weapon_skin_id = weapon_skin_list[0] if weapon_skin_list else None
 
     pet_skin_id = data.get("petInfo", {}).get("skinId")
 
