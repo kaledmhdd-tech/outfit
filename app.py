@@ -20,7 +20,7 @@ def is_key_valid(api_key):
     return API_KEYS.get(api_key, False)
 
 def fetch_data(uid):
-    url = f"https://info-five-mauve.vercel.app/accinfo?uid={uid}&region=IND"
+    url = f"http://217.160.125.128:14214/accinfo?uid={uid}&region=IND"
     try:
         res = requests.get(url, timeout=10)
         res.raise_for_status()
